@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,11 +26,14 @@ import (
 )
 
 // 全局音频播放器
-var alertPlayer *audio.AlertPlayer
+var alertPlayer *audio.AlertPlayer // 倒计时结束提示音（alert.mp3）
+var hintPlayer *audio.AlertPlayer  // 随机提示音（alarm.mp3）
 
 // 全局设置
 var (
 	muteAlerts = false // 是否静音提示音
+	// 随机提示音功能开关
+	randomHintEnabled = false
 )
 
 // 初始化音频播放器
@@ -43,7 +47,7 @@ func initAudioPlayer(app fyne.App) {
 		return
 	}
 
-	// 设置音频文件路径
+	// 设置音频文件路径（倒计时结束）
 	alertSoundPath := filepath.Join(dir, "resources", "sounds", "alert.mp3")
 	log.Printf("[DEBUG] 音频文件路径: %s", alertSoundPath)
 
@@ -81,6 +85,23 @@ func initAudioPlayer(app fyne.App) {
 		alertPlayer = nil // 设置为nil以防止后续使用
 	} else {
 		log.Printf("[DEBUG] 提示音文件已成功加载")
+	}
+
+	// -------------- 初始化随机提示音播放器 --------------
+	alarmSoundPath := filepath.Join(dir, "resources", "sounds", "alarm.mp3")
+	log.Printf("[DEBUG] 随机提示音文件路径: %s", alarmSoundPath)
+
+	if _, err := os.Stat(alarmSoundPath); os.IsNotExist(err) {
+		log.Printf("[WARNING] 随机提示音文件不存在: %s", alarmSoundPath)
+	} else {
+		hintPlayer = audio.NewAlertPlayer(alarmSoundPath)
+		if err := hintPlayer.Init(); err != nil {
+			log.Printf("[ERROR] 初始化随机提示音播放器失败: %v", err)
+			hintPlayer = nil
+		} else if err := hintPlayer.LoadSound(); err != nil {
+			log.Printf("[ERROR] 加载随机提示音文件失败: %v", err)
+			hintPlayer = nil
+		}
 	}
 }
 
@@ -736,6 +757,9 @@ func NewMainWindow(app fyne.App) fyne.Window {
 	timerLabel.Hide()
 	var stopBtn *widget.Button
 
+	// 随机提示音取消通道
+	var randomHintCancel chan struct{}
+
 	startBtn := widget.NewButtonWithIcon("开始", theme.MediaPlayIcon(), func() {
 		if runningTimer != nil {
 			return // already running
@@ -774,6 +798,52 @@ func NewMainWindow(app fyne.App) fyne.Window {
 
 		currentSessionID = sessionID
 
+		// 如果启用随机提示音功能，为本次计时创建调度
+		if randomHintEnabled {
+			randomHintCancel = make(chan struct{})
+			log.Printf("[RANDOM] 随机提示音调度已启动，模式=%s，目标时长=%d秒", mode, secs)
+			go func(t *logic.Timer, cancelCh <-chan struct{}) {
+				r := rand.New(rand.NewSource(time.Now().UnixNano()))
+				for {
+					// 生成5-10分钟的随机间隔
+					delayMin := r.Intn(6) + 5 // [5,10]
+					delay := time.Duration(delayMin) * time.Minute
+					log.Printf("[RANDOM] 下一次随机提示音将在 %d 分钟后触发", delayMin)
+					select {
+					case <-time.After(delay):
+						// 检查是否被取消
+						select {
+						case <-cancelCh:
+							log.Printf("[RANDOM] 收到取消信号，随机提示音调度结束")
+							return
+						default:
+						}
+
+						// 倒计时模式下，若已不足10分钟则不再播放，直接退出循环
+						if t.Mode == logic.ModeCountDown {
+							remain := t.TargetSeconds - t.ElapsedSeconds()
+							if remain <= 600 {
+								log.Printf("[RANDOM] 剩余时间 %d 秒 ≤ 600，跳过并结束随机提示音调度", remain)
+								return
+							}
+						}
+
+						if !muteAlerts && hintPlayer != nil {
+							if err := hintPlayer.PlayFor(10 * time.Second); err != nil {
+								log.Printf("[ERROR] 随机提示音播放失败: %v", err)
+							}
+						}
+
+						log.Printf("[RANDOM] 已播放随机提示音 10 秒片段")
+
+					case <-cancelCh:
+						log.Printf("[RANDOM] 收到取消信号，随机提示音调度结束")
+						return
+					}
+				}
+			}(runningTimer, randomHintCancel)
+		}
+
 		go func(sessID int64, mode string) {
 			for tick := range runningTimer.Chan() {
 				// update label
@@ -793,14 +863,14 @@ func NewMainWindow(app fyne.App) fyne.Window {
 						// 在主线程上处理提示音和对话框
 						runOnMain(func() {
 							// 先停止任何可能正在播放的提示音
-							if alertPlayer != nil {
-								alertPlayer.Stop()
+							if hintPlayer != nil {
+								hintPlayer.Stop()
 							}
 
 							// 如果没有静音，播放提示音
-							if !muteAlerts && alertPlayer != nil {
+							if !muteAlerts && hintPlayer != nil {
 								log.Printf("[DEBUG] 倒计时结束，开始播放提示音...")
-								if err := alertPlayer.PlayLoop(); err != nil {
+								if err := hintPlayer.PlayLoop(); err != nil {
 									log.Printf("[ERROR] 播放提示音失败: %v", err)
 								} else {
 									log.Printf("[DEBUG] 提示音开始播放")
@@ -818,6 +888,11 @@ func NewMainWindow(app fyne.App) fyne.Window {
 						runningTimer = nil
 						timerLabel.Hide()
 						stopBtn.Disable()
+						// 停止随机提示音调度
+						if randomHintCancel != nil {
+							close(randomHintCancel)
+							randomHintCancel = nil
+						}
 						updateHistory()
 					})
 				}
@@ -844,15 +919,33 @@ func NewMainWindow(app fyne.App) fyne.Window {
 		stopBtn.Disable()
 
 		// 停止任何正在播放的提示音
-		if alertPlayer != nil {
+		if hintPlayer != nil {
 			log.Printf("[DEBUG] 停止按钮被点击，正在停止所有提示音")
-			alertPlayer.Stop()
+			hintPlayer.Stop()
 			log.Printf("[DEBUG] 提示音已停止")
+		}
+
+		// 停止随机提示音调度
+		if randomHintCancel != nil {
+			close(randomHintCancel)
+			randomHintCancel = nil
 		}
 
 		updateHistory()
 	})
 	stopBtn.Disable()
+
+	// 创建随机提示音按钮
+	var randomBtn *widget.Button
+	randomBtn = widget.NewButton("随机提示音: 关", func() {
+		randomHintEnabled = !randomHintEnabled
+		if randomHintEnabled {
+			randomBtn.SetText("随机提示音: 开")
+		} else {
+			randomBtn.SetText("随机提示音: 关")
+		}
+	})
+	randomBtn.Importance = widget.LowImportance
 
 	// 创建静音按钮
 	var muteBtn *widget.Button
@@ -863,9 +956,9 @@ func NewMainWindow(app fyne.App) fyne.Window {
 			muteBtn.SetIcon(theme.VolumeMuteIcon())
 
 			// 立即停止正在播放的提示音
-			if alertPlayer != nil {
+			if hintPlayer != nil {
 				log.Printf("[DEBUG] 尝试停止正在播放的提示音")
-				alertPlayer.Stop()
+				hintPlayer.Stop()
 				log.Printf("[DEBUG] 提示音已停止")
 			}
 		} else {
@@ -875,7 +968,7 @@ func NewMainWindow(app fyne.App) fyne.Window {
 	})
 	muteBtn.Importance = widget.LowImportance
 
-	timeRow := container.NewHBox(layout.NewSpacer(), timerLabel, stopBtn, muteBtn)
+	timeRow := container.NewHBox(layout.NewSpacer(), timerLabel, stopBtn, muteBtn, randomBtn)
 
 	controlBar := container.NewVBox(container.NewHBox(modeRadio, widget.NewLabel("时长(分钟):"), minuteEntry, startBtn), timeRow)
 

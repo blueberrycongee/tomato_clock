@@ -17,12 +17,8 @@ func runOnMain(f func()) {
 	if f == nil {
 		return
 	}
-	if driver, ok := fyne.CurrentApp().Driver().(interface{ RunOnMain(func()) }); ok {
-		driver.RunOnMain(f)
-	} else {
-		// 回退：直接调用（可能导致并发问题，但兼容无此方法的驱动）
-		f()
-	}
+	// 使用 fyne.Do 以兼容 2.6+ 新线程模型，避免日志警告
+	fyne.Do(f)
 }
 
 // ShowFloating 创建始终置顶的悬浮计时小窗

@@ -33,7 +33,7 @@ func (a *AlertPlayer) Init() error {
 	}
 
 	// 初始化音频播放器，采样率44100，缓冲区大小512
-	err := speaker.Init(44100, 512)
+	err := speaker.Init(48000, 5120)
 	if err != nil {
 		return err
 	}
@@ -121,4 +121,40 @@ func (a *AlertPlayer) Stop() {
 		// 使用speaker.Clear()清除所有正在播放的音频
 		speaker.Clear()
 	}
+}
+
+// PlayFor 播放提示音的前 duration 时长，播放一次后自动停止。
+// 如果当前正在播放（循环或单次），将直接返回不做处理。
+func (a *AlertPlayer) PlayFor(duration time.Duration) error {
+	// 确保已初始化
+	if err := a.Init(); err != nil {
+		return err
+	}
+
+	// 确保声音文件已加载
+	if err := a.LoadSound(); err != nil {
+		return err
+	}
+
+	if a.isPlaying {
+		// 已经在播放中，避免重叠播放
+		return nil
+	}
+
+	// 计算需要播放的采样数量
+	format := a.buffer.Format()
+	samples := format.SampleRate.N(duration)
+
+	streamer := a.buffer.Streamer(0, a.buffer.Len())
+	// 截取前 duration 的采样
+	limited := beep.Take(samples, streamer)
+
+	a.isPlaying = true
+
+	// 播放并在结束后重置状态
+	speaker.Play(beep.Seq(limited, beep.Callback(func() {
+		a.isPlaying = false
+	})))
+
+	return nil
 }
