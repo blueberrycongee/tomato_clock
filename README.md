@@ -35,7 +35,7 @@ $ ./tomato_clock.exe
 
 ### 二进制发行版
 
-在仓库的 [Releases](https://github.com/blueberryngz/tomato_clock/releases) 页面将提供预编译好的可执行文件，下载后直接双击即可运行。
+在仓库的 [Releases](https://github.com/blueberrycongee/tomato_clock/releases) 页面将提供预编译好的可执行文件，下载后直接双击即可运行。
 
 ## 项目结构
 
