@@ -195,8 +195,9 @@ func showSessionEditDialog(session model.TimerSession, w fyne.Window, updateCall
 		startStr := startDateStr + " " + startTimeStr
 		endStr := endDateStr + " " + endTimeStr
 
-		startT, err1 := time.Parse("2006-01-02 15:04:05", startStr)
-		endT, err2 := time.Parse("2006-01-02 15:04:05", endStr)
+		// 使用 ParseInLocation 确保解析结果带有本地时区，避免时区丢失
+		startT, err1 := time.ParseInLocation("2006-01-02 15:04:05", startStr, time.Local)
+		endT, err2 := time.ParseInLocation("2006-01-02 15:04:05", endStr, time.Local)
 
 		if err1 != nil {
 			log.Printf("[DEBUG] 开始时间解析错误: %v", err1)
@@ -281,7 +282,7 @@ func showSessionEditDialog(session model.TimerSession, w fyne.Window, updateCall
 			endStr := endDate.Text + " " + endTime.Text
 
 			log.Printf("[DEBUG] 尝试解析开始时间: %s", startStr)
-			startedAt, err := time.Parse("2006-01-02 15:04:05", startStr)
+			startedAt, err := time.ParseInLocation("2006-01-02 15:04:05", startStr, time.Local)
 			if err != nil {
 				log.Printf("[DEBUG] 开始时间解析失败: %v", err)
 				dialog.ShowError(errors.New("开始时间格式无效，请使用YYYY-MM-DD格式的日期和HH:MM:SS格式的时间"), w)
@@ -289,7 +290,7 @@ func showSessionEditDialog(session model.TimerSession, w fyne.Window, updateCall
 			}
 
 			log.Printf("[DEBUG] 尝试解析结束时间: %s", endStr)
-			endedAt, err := time.Parse("2006-01-02 15:04:05", endStr)
+			endedAt, err := time.ParseInLocation("2006-01-02 15:04:05", endStr, time.Local)
 			if err != nil {
 				log.Printf("[DEBUG] 结束时间解析失败: %v", err)
 				dialog.ShowError(errors.New("结束时间格式无效，请使用YYYY-MM-DD格式的日期和HH:MM:SS格式的时间"), w)
