@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -24,6 +25,12 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+// 全局饼图变量
+var pieChart24h *PieChart
+var pieChartToday *PieChart
+var studyGoalLabel = "学习"       // 可以配置的目标标签
+var studyGoalSeconds = 8 * 3600 // 8小时目标
 
 // 全局音频播放器
 var alertPlayer *audio.AlertPlayer // 倒计时结束提示音（alert.mp3）
@@ -402,6 +409,77 @@ func showTimerCompletedDialog(w fyne.Window, callback func()) {
 		w,
 	)
 	confirmDialog.Show()
+}
+
+// updatePieCharts 更新两个饼图的数据
+func updatePieCharts() {
+	// 1. 更新24小时专注占比图
+	durations := model.Last24HoursFocusTimeByLabel()
+	var segments24h []PieChartSegment
+	for label, sec := range durations {
+		if sec > 0 {
+			segments24h = append(segments24h, PieChartSegment{Label: label, Value: float64(sec)})
+		}
+	}
+	if pieChart24h != nil {
+		pieChart24h.UpdateData(segments24h)
+	}
+
+	// 2. 更新今日学习目标图
+	todayStudySec := 0
+	now := time.Now()
+	year, month, day := now.Date()
+	startOfToday := time.Date(year, month, day, 0, 0, 0, 0, now.Location())
+
+	// 这个计算需要访问 taskLabelMap，确保它已经被填充
+	// 我们将在 updateHistory 中调用此函数，届时 taskLabelMap 是最新的
+	allSessions := model.CompletedSessions()
+	allTasks, _ := model.ListTasks()
+	taskLabelMap := make(map[int64]string)
+	for _, t := range allTasks {
+		taskLabelMap[t.ID] = t.Label
+	}
+
+	for _, s := range allSessions {
+		if s.EndedAt.After(startOfToday) {
+			if s.TaskID != nil {
+				if label, ok := taskLabelMap[*s.TaskID]; ok && label == studyGoalLabel {
+					todayStudySec += s.DurationSec
+				}
+			}
+		}
+	}
+
+	completed := float64(todayStudySec)
+	remaining := math.Max(0, float64(studyGoalSeconds)-completed)
+
+	segmentsToday := []PieChartSegment{
+		{Label: "已完成", Value: completed},
+		{Label: "未完成", Value: remaining},
+	}
+	if pieChartToday != nil {
+		pieChartToday.UpdateData(segmentsToday)
+		// 更新标题以显示具体时间
+		pieChartToday.titleLabel.SetText(
+			fmt.Sprintf("今日%s目标 (%s/%s)",
+				studyGoalLabel,
+				model.FormatDuration(int(completed)),
+				model.FormatDuration(studyGoalSeconds),
+			),
+		)
+	}
+}
+
+// createPieChartsPanel 创建饼图面板
+func createPieChartsPanel() fyne.CanvasObject {
+	pieChart24h = NewPieChart("过去24小时专注占比", []PieChartSegment{})
+	pieChartToday = NewPieChart(fmt.Sprintf("今日%s目标", studyGoalLabel), []PieChartSegment{})
+
+	// 立即进行一次初始更新
+	updatePieCharts()
+
+	grid := container.NewGridWithColumns(2, pieChart24h, pieChartToday)
+	return grid
 }
 
 func NewMainWindow(app fyne.App) fyne.Window {
@@ -991,6 +1069,8 @@ func NewMainWindow(app fyne.App) fyne.Window {
 		}
 		sort.Strings(parts)
 		statsLabel.SetText(strings.Join(parts, "\n"))
+		// 更新饼图
+		updatePieCharts()
 	}
 	// 初次计算
 	updateStats()
@@ -1006,14 +1086,18 @@ func NewMainWindow(app fyne.App) fyne.Window {
 	// 顶栏：新建 + 清空 + 统计 + 时钟
 	topBar := container.NewHBox(addBtn, widget.NewSeparator(), clearBtn, layout.NewSpacer(), statsLabel, refreshBtn, widget.NewSeparator(), clockLabel)
 
-	// 主区域改为左右分栏：任务列表 + 统计
-	split := container.NewHSplit(list, sessionList)
-	split.Offset = 0.6
+	// 主区域改为左右分栏：任务列表 + 饼图 + 历史记录
+	chartsPanel := createPieChartsPanel()
+	leftPanel := container.NewVSplit(list, chartsPanel)
+	leftPanel.Offset = 0.6 // 60%给任务列表，40%给饼图
+
+	split := container.NewHSplit(leftPanel, sessionList)
+	split.Offset = 0.4 // 40%给左侧面板，60%给历史记录
 
 	content := container.NewBorder(topBar, controlBar, nil, nil, split)
 
 	w.SetContent(content)
-	w.Resize(fyne.NewSize(600, 600))
+	w.Resize(fyne.NewSize(800, 600)) // 增大窗口尺寸以容纳新组件
 
 	return w
 }

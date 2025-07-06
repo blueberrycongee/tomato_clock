@@ -67,3 +67,27 @@ var (
 	morandiPrimaryHi = color.NRGBA{R: 0x8d, G: 0xb1, B: 0xab, A: 0xff}
 	morandiText      = color.NRGBA{R: 0x33, G: 0x34, B: 0x35, A: 0xff}
 )
+
+// MorandiColors 定义了一组莫兰迪色系的颜色
+var MorandiColors = []color.Color{
+	// 灰粉色系
+	color.NRGBA{R: 218, G: 195, B: 194, A: 255}, // #DAC3C2
+	color.NRGBA{R: 195, G: 177, B: 171, A: 255}, // #C3B1AB
+	// 灰绿色系
+	color.NRGBA{R: 176, G: 190, B: 181, A: 255}, // #B0BEB5
+	color.NRGBA{R: 147, G: 161, B: 152, A: 255}, // #93A198
+	// 灰蓝色系
+	color.NRGBA{R: 163, G: 182, B: 191, A: 255}, // #A3B6BF
+	color.NRGBA{R: 132, G: 153, B: 164, A: 255}, // #8499A4
+	// 大地色系
+	color.NRGBA{R: 202, G: 189, B: 162, A: 255}, // #CABDA2
+	color.NRGBA{R: 180, G: 166, B: 143, A: 255}, // #B4A68F
+}
+
+// GetMorandiColor 根据索引获取一个莫兰迪颜色，循环使用
+func GetMorandiColor(index int) color.Color {
+	if len(MorandiColors) == 0 {
+		return theme.PrimaryColor()
+	}
+	return MorandiColors[index%len(MorandiColors)]
+}
