@@ -15,10 +15,6 @@
 - **跨平台**：得益于 Fyne 框架，可在 **Windows / macOS / Linux** 运行。
 - **纯 Go 实现**：无需额外依赖，`go build` 即可得到单一可执行文件。
 
-## 预览
-
-![应用截图](https://raw.githubusercontent.com/your-repo/image-placeholder/main/screenshot.png) 
-*请将上面的链接替换为您自己的图床图片链接*
 
 ## 安装与运行
 
@@ -39,7 +35,7 @@ $ ./tomato_clock.exe
 
 ### 二进制发行版
 
-在仓库的 [Releases](https://github.com/yourusername/tomato_clock/releases) 页面将提供预编译好的可执行文件，下载后直接双击即可运行。
+在仓库的 [Releases](https://github.com/blueberryngz/tomato_clock/releases) 页面将提供预编译好的可执行文件，下载后直接双击即可运行。
 
 ## 项目结构
 
