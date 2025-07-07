@@ -618,6 +618,49 @@ func NewMainWindow(app fyne.App) fyne.Window {
 			}, w)
 	})
 
+	// 新建倒数日按钮
+	countdownBtn := widget.NewButtonWithIcon("倒数日", theme.DocumentCreateIcon(), func() {
+		titleEntry := widget.NewEntry()
+		titleEntry.SetPlaceHolder("事件标题")
+		dateEntry := widget.NewEntry()
+		dateEntry.SetPlaceHolder("YYYY-MM-DD")
+		labelEntry := widget.NewEntry()
+		labelEntry.SetText("重要")
+		labelEntry.SetPlaceHolder("标签，可选")
+		dialog.ShowForm("新建倒数日", "创建", "取消",
+			[]*widget.FormItem{
+				widget.NewFormItem("标题", titleEntry),
+				widget.NewFormItem("日期", dateEntry),
+				widget.NewFormItem("标签", labelEntry),
+			},
+			func(confirm bool) {
+				if !confirm || titleEntry.Text == "" || dateEntry.Text == "" {
+					return
+				}
+				due, err := time.Parse("2006-01-02", dateEntry.Text)
+				if err != nil {
+					dialog.ShowError(err, w)
+					return
+				}
+				task := &model.Task{
+					Title:      titleEntry.Text,
+					IsDone:     false,
+					RepeatRule: model.RepeatNone,
+					Label:      labelEntry.Text,
+					DueDate:    &due,
+				}
+				if err := model.CreateTask(task); err != nil {
+					dialog.ShowError(err, w)
+					return
+				}
+				tasks, _ = model.ListTasks()
+				list.Refresh()
+				if updateStats != nil {
+					updateStats()
+				}
+			}, w)
+	})
+
 	// 清空历史按钮
 	clearBtn := widget.NewButtonWithIcon("清空记录", theme.DeleteIcon(), func() {
 		dialog.ShowConfirm("确认", "确定要清空所有历史专注记录吗？", func(ok bool) {
@@ -1056,20 +1099,39 @@ func NewMainWindow(app fyne.App) fyne.Window {
 	statsLabel.TextStyle = fyne.TextStyle{Bold: true}
 
 	updateStats = func() {
+		var parts []string
+		// --- 专注统计 ---
 		durations := model.Last24HoursFocusTimeByLabel()
 		if len(durations) == 0 {
-			statsLabel.SetText("过去24小时专注: 暂无数据")
-			return
+			parts = append(parts, "过去24小时专注: 暂无数据")
+		} else {
+			for label, sec := range durations {
+				if sec == 0 {
+					continue
+				}
+				parts = append(parts, fmt.Sprintf("过去24小时%s: %s", label, model.FormatDuration(sec)))
+			}
 		}
-		var parts []string
-		for label, sec := range durations {
-			if sec == 0 {
+
+		// --- 倒数日统计 ---
+		now := time.Now()
+		allTasks, _ := model.ListTasks()
+		for _, t := range allTasks {
+			if t.DueDate == nil {
 				continue
 			}
-			parts = append(parts, fmt.Sprintf("过去24小时%s: %s", label, model.FormatDuration(sec)))
+			days := int(t.DueDate.Sub(now).Hours() / 24)
+			if days < 0 {
+				continue // 已过期
+			}
+			weeks := int(math.Ceil(float64(days) / 7.0))
+			months := int(math.Ceil(float64(days) / 30.0))
+			parts = append(parts, fmt.Sprintf("距离%s: %d天 / %d周 / %d月", t.Title, days, weeks, months))
 		}
+
 		sort.Strings(parts)
 		statsLabel.SetText(strings.Join(parts, "\n"))
+
 		// 更新饼图
 		updatePieCharts()
 	}
@@ -1084,8 +1146,8 @@ func NewMainWindow(app fyne.App) fyne.Window {
 	})
 	refreshBtn.Importance = widget.LowImportance
 
-	// 顶栏：新建 + 清空 + 统计 + 时钟
-	topBar := container.NewHBox(addBtn, widget.NewSeparator(), clearBtn, layout.NewSpacer(), statsLabel, refreshBtn, widget.NewSeparator(), clockLabel)
+	// 顶栏：新建任务 + 倒数日 + 清空 + 统计 + 时钟
+	topBar := container.NewHBox(addBtn, countdownBtn, widget.NewSeparator(), clearBtn, layout.NewSpacer(), statsLabel, refreshBtn, widget.NewSeparator(), clockLabel)
 
 	// 主区域改为左右分栏：任务列表 + 饼图 + 历史记录
 	chartsPanel := createPieChartsPanel()
