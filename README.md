@@ -17,12 +17,6 @@
 - **跨平台**：得益于 Fyne，可在 **Windows / macOS / Linux** 运行。
 - **纯 Go 实现**：无需额外依赖，`go build` 即可得到单一可执行文件。
 
-## 界面截图
-
-> 请将实际截图放置于 `docs/screenshot.png` 后替换下方占位符。
-
-![界面截图](docs/screenshot.png)
-
 ## 安装与运行
 
 ### 从源代码构建
@@ -30,7 +24,7 @@
 ```bash
 # 1. 安装 Go（≥1.22）
 # 2. 克隆代码仓库
-$ git clone https://github.com/yourusername/tomato_clock.git
+$ git clone https://github.com/blueberrycongee/tomato_clock.git
 $ cd tomato_clock
 
 # 3. 构建可执行文件
