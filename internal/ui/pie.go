@@ -14,6 +14,8 @@ import (
 	"github.com/fogleman/gg"
 )
 
+const pieMinSize = 100 // 最小饼图尺寸，可按需调整
+
 // PieChartSegment 定义了饼图的单个部分
 type PieChartSegment struct {
 	Label string
@@ -140,7 +142,7 @@ func (pc *PieChart) updateLegend() {
 
 // CreateRenderer 创建此小部件的渲染器
 func (pc *PieChart) CreateRenderer() fyne.WidgetRenderer {
-	pc.chartRaster.SetMinSize(fyne.NewSize(150, 150))
+	pc.chartRaster.SetMinSize(fyne.NewSize(pieMinSize, pieMinSize))
 	layout := container.NewBorder(pc.titleLabel, pc.legend, nil, nil, pc.chartRaster)
 	return &pieChartRenderer{
 		pieChart: pc,

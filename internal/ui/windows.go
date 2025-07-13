@@ -587,7 +587,7 @@ func NewMainWindow(app fyne.App) fyne.Window {
 		}
 	}
 
-	addBtn := widget.NewButtonWithIcon("新建任务", theme.ContentAddIcon(), func() {
+	addBtn := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
 		titleEntry := widget.NewEntry()
 		titleEntry.SetPlaceHolder("任务标题")
 		labelEntry := widget.NewEntry()
@@ -619,9 +619,12 @@ func NewMainWindow(app fyne.App) fyne.Window {
 				}
 			}, w)
 	})
+	addBtn.Importance = widget.LowImportance
+	// 使用 24x24 尺寸以保持与输入框同高
+	addBtn.Resize(fyne.NewSize(24, 24))
 
 	// 新建倒数日按钮
-	countdownBtn := widget.NewButtonWithIcon("倒数日", theme.DocumentCreateIcon(), func() {
+	countdownBtn := widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {
 		titleEntry := widget.NewEntry()
 		titleEntry.SetPlaceHolder("事件标题")
 		dateEntry := widget.NewEntry()
@@ -662,9 +665,11 @@ func NewMainWindow(app fyne.App) fyne.Window {
 				}
 			}, w)
 	})
+	countdownBtn.Importance = widget.LowImportance
+	countdownBtn.Resize(fyne.NewSize(24, 24))
 
 	// 清空历史按钮
-	clearBtn := widget.NewButtonWithIcon("清空记录", theme.DeleteIcon(), func() {
+	clearBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		dialog.ShowConfirm("确认", "确定要清空所有历史专注记录吗？", func(ok bool) {
 			if !ok {
 				return
@@ -678,6 +683,14 @@ func NewMainWindow(app fyne.App) fyne.Window {
 			}
 		}, w)
 	})
+	clearBtn.Importance = widget.LowImportance
+	clearBtn.Resize(fyne.NewSize(24, 24))
+
+	// 将三个小按钮包裹为固定24×24大小，保证与输入框在同一水平线
+	gridAdd := container.NewGridWrap(fyne.NewSize(24, 24), addBtn)
+	gridCountdown := container.NewGridWrap(fyne.NewSize(24, 24), countdownBtn)
+	gridClear := container.NewGridWrap(fyne.NewSize(24, 24), clearBtn)
+	smallBtns := container.NewHBox(gridAdd, gridCountdown, gridClear)
 
 	// 实时系统时间标签
 	clockLabel := widget.NewLabel("")
@@ -1222,12 +1235,20 @@ func NewMainWindow(app fyne.App) fyne.Window {
 
 	// 顶栏：新建任务 + 倒数日 + 清空 + API Key/Chat + 统计 + 时钟
 	// 移除 aiBtn
-	topBar := container.NewHBox(addBtn, countdownBtn, widget.NewSeparator(), clearBtn, layout.NewSpacer(), entryApiKey, btnSaveKey, widget.NewSeparator(), entryChat, btnSendChat, widget.NewSeparator(), statsLabel, refreshBtn, widget.NewSeparator(), clockLabel)
+	// 使用 GridWrap 对输入框进行固定宽度包装，使其在 HBox 中占据更大空间
+	apiKeyWrapped := container.NewGridWrap(fyne.NewSize(220, entryApiKey.MinSize().Height), entryApiKey)
+	chatWrapped := container.NewGridWrap(fyne.NewSize(340, entryChat.MinSize().Height), entryChat)
+
+	// 使保存按钮与发送按钮高度与输入框一致
+	saveWrapped := container.NewGridWrap(fyne.NewSize(btnSaveKey.MinSize().Width, entryApiKey.MinSize().Height), btnSaveKey)
+	sendWrapped := container.NewGridWrap(fyne.NewSize(btnSendChat.MinSize().Width, entryChat.MinSize().Height), btnSendChat)
+
+	topBar := container.NewHBox(smallBtns, layout.NewSpacer(), apiKeyWrapped, saveWrapped, widget.NewSeparator(), chatWrapped, sendWrapped, widget.NewSeparator(), statsLabel, refreshBtn, widget.NewSeparator(), clockLabel)
 
 	// 主区域改为左右分栏：任务列表 + 饼图 + 历史记录
 	chartsPanel := createPieChartsPanel()
 	leftPanel := container.NewVSplit(list, chartsPanel)
-	leftPanel.Offset = 0.6 // 60%给任务列表，40%给饼图
+	leftPanel.Offset = 0.7 // 70%给任务列表，30%给饼图
 
 	split := container.NewHSplit(leftPanel, sessionList)
 	split.Offset = 0.4 // 40%给左侧面板，60%给历史记录
@@ -1235,7 +1256,7 @@ func NewMainWindow(app fyne.App) fyne.Window {
 	content := container.NewBorder(topBar, controlBar, nil, nil, split)
 
 	w.SetContent(content)
-	w.Resize(fyne.NewSize(800, 600)) // 增大窗口尺寸以容纳新组件
+	w.Resize(fyne.NewSize(900, 600)) // 增大窗口尺寸以容纳新组件
 
 	return w
 }
