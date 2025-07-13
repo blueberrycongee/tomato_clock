@@ -5,6 +5,7 @@ go 1.22
 require (
 	fyne.io/fyne/v2 v2.6.1
 	github.com/faiface/beep v1.1.0
+	github.com/fogleman/gg v1.3.0
 	modernc.org/sqlite v1.22.0
 )
 
@@ -13,7 +14,6 @@ require (
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/fredbi/uri v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/fyne-io/gl-js v0.1.0 // indirect

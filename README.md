@@ -64,3 +64,46 @@ $ ./tomato_clock.exe
 ## 许可证
 
 本项目基于 **MIT License**，详见 [LICENSE](LICENSE)。 
+
+## 🔥 自然语言聊天助手（LangChain）
+
+现在，你可以通过中文对话来记录番茄钟活动，而不必手动点击界面或填写表单。
+
+### 安装依赖
+
+```bash
+# 进入仓库根目录
+python -m venv .venv && source .venv/bin/activate  # Windows 使用 .venv\Scripts\activate
+pip install -r requirements.txt
+
+# 设置 OpenAI API Key（以 PowerShell 为例）
+$Env:OPENAI_API_KEY = "sk-..."
+```
+
+### 启动助手
+
+```bash
+python -m agent.agent
+```
+
+### 对话示例
+
+```text
+你: 我下午大概两点半的时候看了半个小时的书
+助手: 记录成功，计时 ID = 42
+```
+
+助手会自动解析时间表达，转换为北京时区，并把记录写入 `.tomato_clock.json`。随后在番茄钟 GUI 中即可看到同步后的统计变化。 
+
+### 使用 DeepSeek 模型
+
+若你拥有 [DeepSeek](https://deepseek.com/) 的 API Key，可按如下方式切换：
+
+```bash
+# 设置 DeepSeek 相关环境变量
+export OPENAI_API_KEY="sk-..."       # DeepSeek 提供的 Key
+export OPENAI_API_BASE="https://api.deepseek.com"
+export OPENAI_MODEL="deepseek-chat"  # 可选，自定义模型名
+
+python -m agent.agent
+``` 

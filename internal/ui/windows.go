@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"tomato_clock/internal/agent"
 	"tomato_clock/internal/audio"
+	"tomato_clock/internal/config"
 	"tomato_clock/internal/logic"
 	"tomato_clock/internal/model"
 
@@ -1146,8 +1148,81 @@ func NewMainWindow(app fyne.App) fyne.Window {
 	})
 	refreshBtn.Importance = widget.LowImportance
 
-	// 顶栏：新建任务 + 倒数日 + 清空 + 统计 + 时钟
-	topBar := container.NewHBox(addBtn, countdownBtn, widget.NewSeparator(), clearBtn, layout.NewSpacer(), statsLabel, refreshBtn, widget.NewSeparator(), clockLabel)
+	// 初始化配置并启动 AI 代理
+	var initAPIKey string
+	if cfg, err := config.Load(); err == nil {
+		initAPIKey = cfg.APIKey
+	} else {
+		log.Printf("[INFO] 未找到配置文件或读取失败: %v", err)
+	}
+
+	aiMgr := agent.Get()
+	if initAPIKey != "" {
+		if err := aiMgr.Start(initAPIKey); err != nil {
+			log.Printf("[ERROR] 启动 AI 代理失败: %v", err)
+		}
+	}
+
+	// 创建 API Key 输入框（密码模式）
+	entryApiKey := widget.NewPasswordEntry()
+	entryApiKey.SetPlaceHolder("DeepSeek API Key")
+	entryApiKey.SetText(initAPIKey)
+
+	btnSaveKey := widget.NewButton("保存Key", func() {
+		key := strings.TrimSpace(entryApiKey.Text)
+		if key == "" {
+			dialog.ShowError(errors.New("API Key 不能为空"), w)
+			return
+		}
+		if err := config.Save(key); err != nil {
+			dialog.ShowError(err, w)
+			return
+		}
+		if err := aiMgr.Start(key); err != nil {
+			dialog.ShowError(err, w)
+			return
+		}
+		dialog.ShowInformation("保存成功", "API Key 已保存并生效", w)
+	})
+
+	// 创建聊天输入框和发送按钮
+	entryChat := widget.NewEntry()
+	entryChat.SetPlaceHolder("向 DeepSeek 提问…")
+
+	sendChat := func() {
+		msg := strings.TrimSpace(entryChat.Text)
+		if msg == "" {
+			return
+		}
+		entryChat.Disable()
+		go func(q string) {
+			reply, err := aiMgr.SendMessage(q)
+			runOnMain(func() {
+				entryChat.Enable()
+			})
+			if err != nil {
+				runOnMain(func() {
+					dialog.ShowError(err, w)
+				})
+				return
+			}
+			// reload data and refresh UI
+			_ = model.Reload()
+			runOnMain(func() {
+				if updateHistory != nil {
+					updateHistory()
+				}
+				dialog.ShowInformation("AI 回复", reply, w)
+			})
+		}(msg)
+	}
+
+	entryChat.OnSubmitted = func(_ string) { sendChat() }
+	btnSendChat := widget.NewButton("发送", sendChat)
+
+	// 顶栏：新建任务 + 倒数日 + 清空 + API Key/Chat + 统计 + 时钟
+	// 移除 aiBtn
+	topBar := container.NewHBox(addBtn, countdownBtn, widget.NewSeparator(), clearBtn, layout.NewSpacer(), entryApiKey, btnSaveKey, widget.NewSeparator(), entryChat, btnSendChat, widget.NewSeparator(), statsLabel, refreshBtn, widget.NewSeparator(), clockLabel)
 
 	// 主区域改为左右分栏：任务列表 + 饼图 + 历史记录
 	chartsPanel := createPieChartsPanel()

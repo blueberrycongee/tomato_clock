@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -51,8 +52,53 @@ func Init() error {
 		return err
 	}
 	if err := json.Unmarshal(b, &data); err != nil {
+		// 尝试兼容无秒的 RFC3339 格式，如 2025-07-13T21:37+08:00
+		patched := fixTimestampWithoutSeconds(b)
+		if patched == nil {
+			return err
+		}
+		if err2 := json.Unmarshal(patched, &data); err2 != nil {
+			return err // 原始错误
+		}
+		// 解析成功后将修正后的内容写回文件
+		b = patched
+		if writeErr := os.WriteFile(filePath, b, 0644); writeErr != nil {
+			log.Printf("[DEBUG] 写回修正后的时间戳失败: %v", writeErr)
+		} else {
+			log.Printf("[DEBUG] 修正无秒时间戳并成功加载数据文件")
+		}
+	}
+	return nil
+}
+
+// Reload 重新从文件加载数据到内存，保持 filePath 不变。
+// 若数据文件不存在，保持现有内存数据不变并返回 os.ErrNotExist。
+func Reload() error {
+	if filePath == "" {
+		return fmt.Errorf("model not initialized")
+	}
+	b, err := os.ReadFile(filePath)
+	if err != nil {
 		return err
 	}
+	var newData struct {
+		NextTaskID    int64          `json:"next_task_id"`
+		NextSessionID int64          `json:"next_session_id"`
+		Tasks         []Task         `json:"tasks"`
+		Sessions      []TimerSession `json:"sessions"`
+	}
+	if err := json.Unmarshal(b, &newData); err != nil {
+		patched := fixTimestampWithoutSeconds(b)
+		if patched == nil {
+			return err
+		}
+		if err2 := json.Unmarshal(patched, &newData); err2 != nil {
+			return err
+		}
+	}
+	mu.Lock()
+	data = newData
+	mu.Unlock()
 	return nil
 }
 
@@ -484,4 +530,15 @@ func Last24HoursFocusTimeByLabel() map[string]int {
 	}
 
 	return result
+}
+
+// fixTimestampWithoutSeconds 在 JSON 字符串里把缺少秒数的时间戳补成 :00。
+// 例如 "2025-07-13T21:37+08:00" -> "2025-07-13T21:37:00+08:00"。
+func fixTimestampWithoutSeconds(src []byte) []byte {
+	re := regexp.MustCompile(`"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(\+[0-9:]+)"`)
+	patched := re.ReplaceAllString(string(src), "\"$1:00$2\"")
+	if patched == string(src) {
+		return nil // 未发现需要修补的内容
+	}
+	return []byte(patched)
 }
